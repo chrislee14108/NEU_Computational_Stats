@@ -1,0 +1,248 @@
+---
+title: "Homework 12"
+author: "Christina Lee"
+date: "11/29/2021"
+output: pdf_document
+---
+
+
+1. Use your dataset with a continuous dependent variable:
+
+
+a. Divide your data into two equal-sized samples, the in-sample and the out-sample. Estimate the elastic net model using the in-sample data with at least three levels of alpha (ie, three positions in between full lasso and full ridge; eg, alpha = 0, 0.5, and 1), using cv.glmnet to find the best lambda level for each run. (Remember that glmnet prefers that data be in a numeric matrix format rather than a data frame.)
+
+I will be using the BostonHousing data set from the mlbench package. The data set contains 14 variables and 506 observations. The data set is used to predict the house price in Boston from house details. 
+```{r}
+#install.packages("mlbench")
+library(mlbench)
+library(glmnet)
+
+#Load data set
+data("BostonHousing")
+
+```
+
+```{r}
+str(BostonHousing) # all variables are numeric except for "chas" which is a factor. 
+
+```
+
+```{r}
+numericvars1 <- c(1:3,5:13)  # extract numeric variables only 
+x <- as.matrix(BostonHousing[,numericvars1])  # numeric matrix
+y <- BostonHousing$medv # numeric vector 
+
+
+```
+
+
+
+```{r}
+# Divide the data set into training and testing sets in two equal-size samples. 
+set.seed(1)
+Train <- sample(1:nrow(x),nrow(x)/2) # half the rows at random
+Test <- setdiff(1:nrow(x), Train) # the other half
+
+Trainx <- x[Train,] # matrix
+Testx <- x[Test,] # matrix
+
+Trainy <- y[Train] # vector
+Testy <- y[Test] # vector 
+
+
+
+```
+
+```{r}
+# Estimate the elastic net model with alpha = 0, 0.5 and 1 using in-sample data. 
+
+Lambdalevels <- 10^seq(7,-7, length =100) # set lambda levels for glmnet to try. 
+
+set.seed(222)
+ridge <- cv.glmnet(Trainx, Trainy, alpha=0, lambda = Lambdalevels) 
+lasso <- cv.glmnet(Trainx, Trainy, alpha=1, lambda = Lambdalevels)
+elnet <- cv.glmnet(Trainx, Trainy, alpha=0.5, lambda = Lambdalevels)
+
+```
+
+
+```{r}
+ridge # find best (minimum) lambda value and MSE for ridge
+
+```
+
+```{r}
+lasso # find best (minimum) lambda value and MSE for lasso 
+
+```
+
+```{r}
+elnet # find best (minimum) lambda value and MSE for elnet 
+
+```
+
+Results:
+The best (minimum) MSE value for full ridge (alpha=0) is 4.281, full lasso (alpha=1) is 4.352 and the elastic net (mix of both lasso/ridge) (alpha=0.5) is 2.676. Hence, for elastic net regression, when alpha = 0.5 it gives the best MSE value which is 2.676.
+
+
+```{r}
+plot(elnet) #shows the MSE values for each lambda value for elnet. 
+
+
+```
+
+
+
+b. Choose the alpha (and corresponding lambda) with the best results (lowest error), and then test that model out-of-sample using the out-sample data. To find the lowest MSE associated the best lambda value from a cv.glmnet ouput, note that my_cv_output has inside it an object called cvm, which is a vector of MSE values associated with each lambda level; min(my_cv_outputcvm) will give you the best MSE from that model.
+
+
+
+```{r}
+yhat.elnet <- predict(elnet$glmnet.fit, s=elnet$lambda.min, newx=Testx)
+
+# mean square error for elnet  
+mse.e <- sum((Testy - yhat.elnet)^2)/nrow(Testx)
+mse.e
+
+
+
+```
+
+
+
+
+c. Compare your out-of-sample results from b to regular multiple regression: fit a regression model using the in-sample data, predict the out-of-sample yhat using the out-of-sample X, and estimate the error between the predicted yhat and the true out-of-sample y. Which worked better, the model from b or the regression model?
+
+```{r}
+lmout <- lm(Trainy ~ Trainx)
+yhat.r <- cbind(1,Testx) %*% lmout$coefficients
+
+# mean square error for Multiple regression fit
+mse.r <- sum((Testy - yhat.r)^2)/nrow(Testx) 
+mse.r
+
+```
+
+
+Based on the results, the MSE for elnet (27.38717) and multiple regression (27.37977) suggests that there is not much of a major difference in MSE, however, multiple regression's MSE is a tiny better than elnet's MSE.
+
+
+
+
+
+d. Which coefficients are different between the multiple regression and the elastic net model? What, if anything, does this tell you substantively about the effects of your independent variables on your dependent variable?
+
+
+```{r}
+coef(elnet, elnet$lambda.min) # coefficients for elnet 
+
+
+
+```
+
+
+
+```{r}
+lmout$coefficients # coefficients for multiple regression 
+
+
+```
+The coefficients left to use for both elnet and multiple regression were fairly similar, leaving me with the same number of coefficients to be used for each final model. This suggests that most of the coefficients (independent variables) do have an effect on predicting the dependent variable y (medv = median value of owner-occupied homes in USD 1000's). Perhaps elnet's reducing feature and capabilities may be greater and more obvious with a larger data set that consists more variables. 
+
+
+
+
+
+2. Repeat the same process using your dataset with a binary dependent variable:
+
+a. Divide your data into an in-sample and out-sample as before, and using the in-sample data, estimate an SVM using at least two different kernels and tune to find the best cost level for each. (Remember that SVM expects the dependent variable to be a factor, so if your dependent variable is numeric 0s and 1s, just us as.factor() to convert it first.)
+
+This is a data set from the "mlbench" package called Sonar, Mines vs. Rocks (named "Sonar" in the package), which it consists 208 observations on 61 variables with the objective being to train a network to discriminate between sonar signals bounced off a metal cylinder and those bounced off a roughly cylindrical rock. Each pattern is a set of 60 numbers in the range 0.0 to 1.0 and each number represents the energy within a particular frequency brand, integrated over a certain period of time. The target variable y is the last (61th) variable "Class" (R = rock or M = mine/metal cylinder).
+```{r}
+library(e1071)
+
+
+data("Sonar") # load data set 
+#str(Sonar) 
+
+```
+
+```{r}
+x <- Sonar[,c(1:60)]
+y <- Sonar$Class
+
+dat <- data.frame(x=x, y=as.factor(y))
+
+# Divide data set into equal training and testing sets. 
+set.seed(123)
+trainSonar <- sample(1:nrow(x), nrow(x)/2) # first half at random 
+testSonar <- setdiff(1:nrow(x), trainSonar) # other half 
+
+trainSonardat <- dat[trainSonar,]
+testSonardat <- dat[testSonar,]
+
+```
+
+```{r}
+costvalues <- 10^seq(-3,2,1) 
+
+# Estimate linear kernel 
+tuned.svm1 <- tune(svm, y~., data= trainSonardat, ranges = list(cost=costvalues), 
+                   kernel= "linear")
+summary(tuned.svm1)
+
+
+
+
+
+
+```
+
+```{r}
+# Estimate radial kernel 
+tuned.svm2 <- tune(svm, y~., data= trainSonardat, ranges = list(cost=costvalues), 
+                   kernel= "radial")
+summary(tuned.svm2)
+
+
+
+
+
+```
+
+According to the results, radial kernel outperformed linear kernel and has the highest in-sample accuracy with best performance being about 13% wrong, or 87% correct (best cost setting at 10), while linear kernel's best performance being about 20% wrong, or 80% correct (best cost setting at 0.01). 
+
+
+
+
+
+b. Chose the kernel and cost with the best in-sample accuracy, and then test that model out-of-sample using the out-sample data. How does the out-of-sample accuracy compare to the in-sample accuracy?
+
+Since radial kernel outperformed linear kernel in (2a), I will be using radial kernel here. 
+```{r}
+tuned.svm3 <- tune(svm, y~., data= trainSonardat, ranges = list(cost=costvalues), 
+                   kernel= "radial")
+
+yhat.radial <- predict(tuned.svm3$best.model, newdata=testSonardat) # predict y with test data
+sum(yhat.radial==testSonardat$y) / length(testSonardat$y) # percentage correct
+
+table(predicted=yhat.radial, truth=testSonardat$y) # confusion matrix 
+
+
+```
+
+Based on the results, the out-of-sample accuracy and the in-sample accuracy for radial kernel are not much different, with the out-of-sample accuracy being ~83% correct and the in-sample accuracy being ~87% correct. 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
